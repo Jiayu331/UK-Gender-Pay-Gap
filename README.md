@@ -1,4 +1,4 @@
-# UK-Gender-Pay-Gap
+# UK-Gender-Pay-Gap_viz
 This is an R visualization practice following @nrennie with TidyTuesday 20220628 data
 In this practice, i tried to replicate @nrennie's visualization of the TodyTuesday 20220628 project
 I managed around 70% and learned so much from @nrennie's original post, a big thank you!
