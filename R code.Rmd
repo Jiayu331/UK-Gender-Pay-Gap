@@ -1,0 +1,186 @@
+---
+title: "2025-03-06"
+author: "Jiayu"
+date: "2025-03-06"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## R Markdown
+
+This is an R Markdown document. Markdown is a simple formatting syntax for authoring HTML, PDF, and MS Word documents. For more details on using R Markdown see <http://rmarkdown.rstudio.com>.
+
+When you click the **Knit** button a document will be generated that includes both content as well as the output of any embedded R code chunks within the document. You can embed an R code chunk like this:
+
+```{r cars}
+summary(cars)
+```
+
+## Including Plots
+
+You can also embed plots, for example:
+
+```{r pressure, echo=FALSE}
+plot(pressure)
+```
+
+Note that the `echo = FALSE` parameter was added to the code chunk to prevent printing of the R code that generated the plot.
+
+```{r}
+library(tidyverse)
+library(tidylog)
+library(janitor)
+library(lubridate)
+library(gtsummary)
+
+library(ggthemes)
+library(ggsci)
+library(ggstats)
+library(ggforce)
+library(cowplot)
+library(paletteer)
+library(scales)
+library(RColorBrewer)
+library(patchwork)
+library(ggtext)
+library(geofacet)
+
+library(glue)
+library(stringr)
+library(showtext)
+library(snakecase)
+
+library(openxlsx)
+library(writexl)
+library(readr)
+
+library(tidytuesdayR)
+library(rvest)
+```
+
+
+```{r}
+jobs_gender <- read_csv("jobs_gender.csv")
+```
+```{r}
+jobs_gender <- readr::read_csv("https://raw.githubusercontent.com/rfordatascience/tidytuesday/main/data/2019/2019-03-05/jobs_gender.csv")
+```
+```{r}
+summary(jobs_gender)
+```
+
+#First Try
+
+```{r}
+sampled_occup <- jobs_gender |>
+  filter(year=="2016" & !is.na(total_earnings_male) & !is.na(total_earnings_female)) |>
+  group_by(major_category) |>
+  sample_n(1) |>
+  select(occupation, major_category, total_earnings_male, total_earnings_female, workers_male, workers_female)
+
+sampled_occup
+```
+
+```{r}
+sampled_occup <- sampled_occup |>
+  rename(median_female = total_earnings_female,
+         median_male = total_earnings_male) |>
+  select(-workers_male, -workers_female) 
+
+sampled_occup
+```
+
+```{r}
+min_max_females <- 
+  jobs_gender |>
+  filter(year=="2016", major_category==c("Computer, Engineering, and Science", "Education, Legal, Community Service, Arts, and Media", "Healthcare Practitioners and Technical", "Management, Business, and Financial", "Natural Resources, Construction, and Maintenance", "Production, Transportation, and Material Moving", "Sales and Office", "Service")) |>
+  select(occupation, major_category, total_earnings_female) |>
+  group_by(major_category) |>
+  summarise(min_earnings_female = min(total_earnings_female, na.rm = TRUE),
+            max_earnings_female = max(total_earnings_female, na.rm = TRUE))
+
+min_max_females
+```
+
+```{r}
+min_max_females <- min_max_females |>
+  select(-major_category)
+
+sampled_occup <- cbind(sampled_occup, min_max_females)
+```
+
+#Second Try
+
+```{r}
+set.seed(123)
+
+plot_data <- jobs_gender |>
+  filter(year=="2016") |>
+  select(occupation, major_category, total_earnings_male, total_earnings_female) |>
+  drop_na() |>
+  group_by(major_category) |>
+  mutate(min_cat_female = min(total_earnings_female),
+         max_cat_female = max(total_earnings_female)) |>
+  slice_sample(n = 1) |>
+  ungroup() |>
+  mutate(label = glue("{str_to_sentence(occupation)} ({major_category})")) |>
+  mutate(label = fct_reorder(label, -total_earnings_female)) |>
+  arrange(desc(total_earnings_female))
+
+plot_data
+```
+
+#plotting
+```{r}
+highlight_col <- "#92032E"
+
+gendergap_plot <- ggplot(plot_data) +
+  geom_col(
+    mapping = aes(x = 1, y = max_cat_female),
+    fill = alpha(highlight_col, 0.3)) +
+  geom_col (
+    mapping = aes(x = 1, y = min_cat_female),
+    fill = alpha(highlight_col, 0.3)) +
+  geom_col (
+    mapping = aes(x = 1, y = total_earnings_female),
+    fill = highlight_col,
+    width = 0.5) +
+  geom_linerange (
+    aes(xmin = 1-0.3, xmax = 1+0.3,
+        y = total_earnings_male),
+        color = "#000000", linewidth = 1.5) +
+  facet_wrap(~label, ncol = 2, strip.position = "left",
+             labeller = label_wrap_gen(28)) +
+  labs(title = "The Gender Pay Gap",
+       subtitle = str_wrap("The gender pay gap is the gap between what men and women are paid. Most commonly, it refers to the median annual pay of all women who work full time and year-round, compared to the pay of a similar cohort of men. This chart shows the median annual income of female employess for a random sample of 8 occupations - one from each major occupation category. The black line shows the median annual income of males in the same occupation. The background bars indicate the minimum and maximum median female incomes for other occupations in the same major category."),
+       y = "Median annual income in 2016($)", x = "") +
+  scale_y_continuous(labels = comma) +
+  theme(plot.margin = margin(5,15,5,10),
+        plot.background = element_rect(fill = "#DCDCDC", color = "#DCDCDC"),
+        panel.background = element_rect(fill = "#DCDCDC", color = "#DCDCDC"),
+        plot.title = element_text(size = 24, face = "bold", hjust = 0, margin = margin(b=10, t=10), lineheight = 0.5),
+        plot.subtitle = element_text(size = 12, hjust = 0, margin = margin(b=10, t=0), lineheight = 1),
+      strip.text.x = element_text(hjust = -1, angle = 90, debug = TRUE, lineheight = 1, size = 10),
+      axis.ticks.y = element_blank(),
+      axis.ticks.x = element_blank(),
+      panel.spacing.y = unit(0.4, "lines"),
+      plot.title.position = "plot",
+      panel.grid.major.y = element_line(
+      linewidth = 0.5, color = alpha("#000000", 0.1)),
+      panel.grid.major.x = element_blank()) +
+  theme_minimal() +
+  coord_flip()
+                                          
+print(gendergap_plot)
+```
+```{r}
+ggsave("the gender pay gap.pdf", height = 10, width = 16)
+```
+        
+
+
+
+
